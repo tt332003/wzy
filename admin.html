@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>商家订单管理端</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: sans-serif; }
+    body { padding: 20px; background-color: #f8f8f8; }
+    .title { text-align: center; margin-bottom: 30px; color: #333; font-size: 24px; }
+    .order-list { max-width: 800px; margin: 0 auto; }
+    .order-item { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; }
+    .order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+    .order-table { font-weight: bold; color: #e63946; }
+    .order-status { padding: 5px 10px; border-radius: 4px; font-size: 14px; }
+    .status-wait { background: #ffd166; color: #fff; }
+    .status-making { background: #06d6a0; color: #fff; }
+    .status-done { background: #118ab2; color: #fff; }
+    .order-body { margin-bottom: 10px; }
+    .goods-item { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14px; }
+    .order-footer { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: #666; flex-wrap: wrap; gap: 10px; }
+    .order-phone { color: #333; font-weight: bold; }
+    .order-time { font-size: 12px; }
+    .status-btn-group { display: flex; gap: 10px; }
+    .status-btn { padding: 5px 10px; border: none; border-radius: 4px; color: #fff; cursor: pointer; font-size: 12px; }
+    .btn-wait { background: #ffd166; }
+    .btn-making { background: #06d6a0; }
+    .btn-done { background: #118ab2; }
+    .loading { text-align: center; color: #666; padding: 20px; }
+    .error-tip { text-align: center; color: #e63946; padding: 20px; }
+    .empty-tip { text-align: center; color: #666; padding: 20px; }
+  </style>
+  <!-- 引入Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <h1 class="title">餐饮店订单管理</h1>
+  <div class="order-list" id="orderList"></div>
+
+  <script>
+    // 1. 初始化Supabase（替换为你的URL和可发布密钥）
+    const supabaseUrl = "https://oqkdcxmtxrwvsocgbpepp.supabase.co";
+    const supabaseKey = "sb_publishable_dOIM3vMGbHXyBaZIM3TZeg_dBSy7t6y..."; // 替换为你的完整可发布密钥
+    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+    // 2. 页面加载后初始化
+    window.onload = async function() {
+      await getOrders();
+      listenOrderChange();
+    };
+
+    // 3. 获取所有订单
+    async function getOrders() {
+      const orderListDom = document.getElementById('orderList');
+      orderListDom.innerHTML = '<p class="loading">正在加载订单...</p>';
+
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .order('create_time', { ascending: false });
+
+        if (error) {
+          throw error;
+        }
+
+        renderOrders(data || []);
+      } catch (err) {
+        console.error("获取订单失败：", err);
+        orderListDom.innerHTML = '<p class="error-tip">订单加载失败，请刷新页面</p>';
+      }
+    }
+
+    // 4. 渲染订单列表
+    function renderOrders(orders) {
+      const orderListDom = document.getElementById('orderList');
+      if (orders.length === 0) {
+        orderListDom.innerHTML = '<p class="empty-tip">暂无订单</p>';
+        return;
+      }
+
+      let orderHtml = '';
+      orders.forEach(order => {
+        // 拼接菜品
+        let goodsHtml = '';
+        order.goods.forEach(good => {
+          goodsHtml += `
+            <div class="goods-item">
+              <span>${good.name} × ${good.num}</span>
+              <span>¥${(good.price * good.num).toFixed(2)}</span>
+            </div>
+          `;
+        });
+
+        // 状态样式
+        let statusClass = '';
+        if (order.status === '待接单') statusClass = 'status-wait';
+        if (order.status === '制作中') statusClass = 'status-making';
+        if (order.status === '已完成') statusClass = 'status-done';
+
+        // 格式化时间
+        const formatTime = new Date(order.create_time).toLocaleString('zh-CN');
+
+        // 拼接订单
+        orderHtml += `
+          <div class="order-item" data-order-id="${order.id}">
+            <div class="order-header">
+              <span class="order-table">${order.table_num}号桌</span>
+              <span class="order-status ${statusClass}">${order.status}</span>
+            </div>
+            <div class="order-body">
+              ${goodsHtml}
+            </div>
+            <div class="order-footer">
+              <div>
+                <span class="order-phone">${order.phone}</span>
+                <span> | 总价：¥${order.total_price.toFixed(2)}</span>
+                <span class="order-time"> | 下单时间：${formatTime}</span>
+              </div>
+              <div class="status-btn-group">
+                <button class="status-btn btn-wait" onclick="updateStatus('${order.id}', '待接单')">待接单</button>
+                <button class="status-btn btn-making" onclick="updateStatus('${order.id}', '制作中')">制作中</button>
+                <button class="status-btn btn-done" onclick="updateStatus('${order.id}', '已完成')">已完成</button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      orderListDom.innerHTML = orderHtml;
+    }
+
+    // 5. 修改订单状态
+    async function updateStatus(orderId, newStatus) {
+      try {
+        const { error } = await supabase
+          .from('orders')
+          .update({ status: newStatus })
+          .eq('id', orderId);
+
+        if (error) {
+          throw error;
+        }
+
+        await getOrders();
+        alert(`订单状态已更新为「${newStatus}」`);
+      } catch (err) {
+        console.error("修改订单状态失败：", err);
+        alert("状态修改失败，请重试");
+      }
+    }
+
+    // 6. 监听订单实时变化
+    function listenOrderChange() {
+      supabase
+        .channel('public:orders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+          console.log("订单数据变化：", payload);
+          getOrders();
+        })
+        .subscribe();
+    }
+  </script>
+</body>
+</html>

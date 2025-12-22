@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的小店 - 下单页</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: sans-serif; }
+    body { padding: 20px; background-color: #f8f8f8; }
+    .shop-title { text-align: center; margin-bottom: 20px; color: #333; font-size: 22px; }
+    .table-select { margin: 15px 0; padding: 10px; background: #fff; border-radius: 8px; }
+    .table-select label { font-weight: bold; color: #555; font-size: 14px; }
+    .table-select select { padding: 5px; margin-left: 10px; border: 1px solid #eee; border-radius: 4px; outline: none; }
+    .goods-list { margin: 10px 0; }
+    .goods-item { background: #fff; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .goods-name { font-size: 18px; color: #333; margin-bottom: 5px; }
+    .goods-price { color: #ff4400; font-weight: bold; margin-bottom: 10px; font-size: 16px; }
+    .goods-desc { color: #666; font-size: 14px; margin-bottom: 15px; line-height: 1.5; }
+    /* 数量控制样式 */
+    .count-control { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+    .count-btn { width: 30px; height: 30px; border: 1px solid #eee; border-radius: 4px; background: #f5f5f5; cursor: pointer; font-size: 16px; transition: background 0.3s; }
+    .count-btn:hover { background: #eaeaea; }
+    .count-input { width: 50px; height: 30px; text-align: center; border: 1px solid #eee; border-radius: 4px; outline: none; }
+    .count-input:focus { border-color: #07c160; }
+    .add-cart-btn { background: #07c160; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: background 0.3s; }
+    .add-cart-btn:hover { background: #06b055; }
+    .cart { background: #fff; padding: 15px; border-radius: 8px; margin-top: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .cart-title { font-weight: bold; margin-bottom: 10px; color: #333; font-size: 18px; }
+    .cart-info { color: #666; margin: 5px 0; line-height: 1.6; white-space: pre-line; font-size: 14px; }
+    .total-price { font-size: 16px; color: #ff4400; font-weight: bold; margin: 15px 0; }
+    .phone-input { width: 100%; padding: 8px; border: 1px solid #eee; border-radius: 4px; margin: 10px 0; outline: none; }
+    .phone-input:focus { border-color: #07c160; }
+    .submit-btn { width: 100%; background: #07c160; color: #fff; border: none; padding: 12px; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background 0.3s; }
+    .submit-btn:hover { background: #06b055; }
+    .no-goods { text-align: center; padding: 20px; background: #fff; border-radius: 8px; color: #666; font-size: 14px; }
+    .error-tip { text-align: center; padding: 20px; background: #fff; border-radius: 8px; color: #ff4400; font-size: 14px; }
+    .loading { text-align: center; padding: 20px; background: #fff; border-radius: 8px; color: #666; font-size: 14px; }
+  </style>
+  <!-- 引入Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <h1 class="shop-title">我的小店</h1>
+
+  <!-- 桌号选择 -->
+  <div class="table-select">
+    <label>选择桌号：</label>
+    <select id="tableSelect">
+      <option value="1">1号桌</option>
+      <option value="2">2号桌</option>
+      <option value="3">3号桌</option>
+      <option value="4">4号桌</option>
+      <option value="5">5号桌</option>
+    </select>
+  </div>
+
+  <!-- 商品列表 -->
+  <div class="goods-list" id="goodsList"></div>
+
+  <!-- 购物车 -->
+  <div class="cart">
+    <h3 class="cart-title">我的购物车</h3>
+    <p class="cart-info" id="cartInfo">购物车为空</p>
+    <p class="total-price">总价：¥<span id="totalPrice">0.00</span></p>
+    <input type="tel" class="phone-input" id="phoneInput" placeholder="请输入您的手机号">
+    <button class="submit-btn" onclick="submitOrder()">提交订单</button>
+  </div>
+
+  <script>
+    // 1. 初始化Supabase（替换为你的URL和可发布密钥）
+    const supabaseUrl = "https://oqkdcxmtrxwvsocgbepp.supabase.co";
+    const supabaseKey = "sb_publishable_dOIM3vMGbHXyBaZIM3TZeg_dBSy7t6y..."; // 替换为你的完整可发布密钥
+    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+    // 2. 全局变量
+    let cartData = [];
+    let goodsList = []; // 存储从云端获取的菜品数据
+
+    // 3. 页面加载后获取云端菜品
+    window.onload = async function() {
+      await getGoodsFromSupabase();
+      renderGoodsList(goodsList);
+      updateCartInfo();
+    };
+
+    // 4. 从Supabase云端获取菜品
+    async function getGoodsFromSupabase() {
+      const goodsListDom = document.getElementById('goodsList');
+      goodsListDom.innerHTML = '<p class="loading">正在加载菜品...</p>';
+
+      try {
+        const { data, error } = await supabase
+          .from('goods')
+          .select('*')
+          .eq('is_sale', true);
+
+        if (error) {
+          throw error;
+        }
+
+        goodsList = data || [];
+      } catch (err) {
+        console.error("获取菜品失败：", err);
+        goodsListDom.innerHTML = '<p class="error-tip">菜品加载失败，请刷新页面</p>';
+      }
+    }
+
+    // 5. 渲染菜品列表
+    function renderGoodsList(goods) {
+      const goodsListDom = document.getElementById('goodsList');
+      if (goods.length === 0) {
+        goodsListDom.innerHTML = '<p class="no-goods">暂无上架菜品</p>';
+        return;
+      }
+
+      goodsListDom.innerHTML = '';
+      goods.forEach(good => {
+        const countInputId = `count_${good.id}`;
+        goodsListDom.innerHTML += `
+          <div class="goods-item" data-id="${good.id}">
+            <h3 class="goods-name">${good.name || '未命名商品'}</h3>
+            <p class="goods-price">¥${good.price.toFixed(2)}</p>
+            <p class="goods-desc">${good.desc || '暂无商品描述'}</p>
+            <div class="count-control">
+              <button class="count-btn" onclick="changeGoodsCount('${countInputId}', -1)">-</button>
+              <input type="number" id="${countInputId}" class="count-input" value="1" min="1" max="99" oninput="limitCount(this)">
+              <button class="count-btn" onclick="changeGoodsCount('${countInputId}', 1)">+</button>
+            </div>
+            <button class="add-cart-btn" onclick="addToCart('${good.id}', '${good.name}', ${good.price}, '${countInputId}')">加入购物车</button>
+          </div>
+        `;
+      });
+    }
+
+    // 6. 限制数量输入范围
+    function limitCount(inputDom) {
+      let count = parseInt(inputDom.value);
+      if (isNaN(count)) count = 1;
+      count = Math.max(1, Math.min(99, count));
+      inputDom.value = count;
+    }
+
+    // 7. 调整商品数量
+    function changeGoodsCount(inputId, change) {
+      const inputDom = document.getElementById(inputId);
+      let currentCount = parseInt(inputDom.value);
+      currentCount += change;
+      currentCount = Math.max(1, Math.min(99, currentCount));
+      inputDom.value = currentCount;
+    }
+
+    // 8. 加入购物车
+    function addToCart(goodsId, goodsName, goodsPrice, countInputId) {
+      const selectCount = parseInt(document.getElementById(countInputId).value);
+      const existItem = cartData.find(item => item.id === goodsId);
+
+      if (existItem) {
+        existItem.num += selectCount;
+      } else {
+        cartData.push({
+          id: goodsId,
+          name: goodsName,
+          price: goodsPrice,
+          num: selectCount
+        });
+      }
+
+      document.getElementById(countInputId).value = 1;
+      updateCartInfo();
+      alert(`${goodsName} × ${selectCount} 已成功加入购物车`);
+    }
+
+    // 9. 更新购物车信息
+    function updateCartInfo() {
+      const cartInfoDom = document.getElementById('cartInfo');
+      const totalPriceDom = document.getElementById('totalPrice');
+      let cartText = '';
+      let totalPrice = 0;
+
+      if (cartData.length === 0) {
+        cartText = '购物车为空';
+        totalPrice = 0;
+      } else {
+        cartData.forEach(item => {
+          const itemTotal = item.price * item.num;
+          cartText += `${item.name} × ${item.num} （¥${itemTotal.toFixed(2)}）\n`;
+          totalPrice += itemTotal;
+        });
+        cartText = cartText.slice(0, -1);
+      }
+
+      cartInfoDom.innerText = cartText;
+      totalPriceDom.innerText = totalPrice.toFixed(2);
+    }
+
+    // 10. 提交订单到云端
+    async function submitOrder() {
+      const phone = document.getElementById('phoneInput').value.trim();
+      const tableNum = document.getElementById('tableSelect').value;
+
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        alert('请输入正确的11位手机号！');
+        return;
+      }
+      if (cartData.length === 0) {
+        alert('请先添加商品到购物车！');
+        return;
+      }
+
+      const totalPrice = parseFloat(document.getElementById('totalPrice').innerText);
+      const orderData = {
+        table_num: tableNum,
+        goods: cartData,
+        total_price: totalPrice,
+        phone: phone,
+        status: "待接单",
+        create_time: new Date().toISOString()
+      };
+
+      try {
+        const { error } = await supabase
+          .from('orders')
+          .insert([orderData]);
+
+        if (error) {
+          throw error;
+        }
+
+        alert(`🎉 下单成功！
+桌号：${tableNum}号桌
+总价：¥${totalPrice.toFixed(2)}
+手机号：${phone}
+商家将尽快为您备餐`);
+
+        cartData = [];
+        updateCartInfo();
+        document.getElementById('phoneInput').value = '';
+      } catch (err) {
+        console.error("提交订单失败：", err);
+        alert("下单失败，请重试");
+      }
+    }
+  </script>
+</body>
+</html>

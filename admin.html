@@ -37,7 +37,77 @@
   <h1 class="title">餐饮店订单管理</h1>
   <div class="order-list" id="orderList"></div>
 
+  <!-- 商家登录模块 -->
+<div id="loginModule" style="max-width: 400px; margin: 50px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+  <h2 style="text-align: center; margin-bottom: 20px; color: #333;">商家登录</h2>
+  <input type="email" id="adminEmail" placeholder="请输入商家邮箱" style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #eee; border-radius: 4px; outline: none;" required>
+  <input type="password" id="adminPwd" placeholder="请输入商家密码" style="width: 100%; padding: 10px; margin-bottom: 20px; border: 1px solid #eee; border-radius: 4px; outline: none;" required>
+  <button onclick="adminLogin()" style="width: 100%; background: #07c160; color: #fff; border: none; padding: 12px; border-radius: 4px; font-size: 16px; cursor: pointer;">登录</button>
+</div>
+
+<!-- 订单管理模块（默认隐藏，登录后显示） -->
+<div id="orderManageModule" style="display: none;">
+  <h1 class="title">餐饮店订单管理</h1>
+  <div class="order-list" id="orderList"></div>
+</div>
+
   <script>
+
+    // 全局变量：标记是否登录
+let isAdminLoggedIn = false;
+
+// 商家登录函数
+async function adminLogin() {
+  const email = document.getElementById('adminEmail').value.trim();
+  const password = document.getElementById('adminPwd').value.trim();
+
+  if (!email || !password) {
+    alert('请填写邮箱和密码！');
+    return;
+  }
+
+  try {
+    // 调用Supabase登录接口，验证商家账号
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    // 登录成功：隐藏登录模块，显示订单管理模块
+    isAdminLoggedIn = true;
+    document.getElementById('loginModule').style.display = 'none';
+    document.getElementById('orderManageModule').style.display = 'block';
+    
+    // 初始化订单数据
+    await getOrders();
+    listenOrderChange();
+    alert('登录成功！');
+  } catch (err) {
+    console.error("商家登录失败：", err);
+    alert('登录失败，请检查邮箱和密码！');
+  }
+}
+
+// 给原有getOrders和updateStatus函数添加登录校验（防止未登录访问）
+async function getOrders() {
+  if (!isAdminLoggedIn) {
+    alert('请先登录商家账号！');
+    return;
+  }
+  // 原有getOrders逻辑不变...
+}
+
+async function updateStatus(orderId, newStatus) {
+  if (!isAdminLoggedIn) {
+    alert('请先登录商家账号！');
+    return;
+  }
+  // 原有updateStatus逻辑不变...
+}
     // 1. 初始化Supabase（替换为你的URL和可发布密钥）
     const supabaseUrl = "https://oqkdcxmtxrwvsocgbpepp.supabase.co";
     const supabaseKey = "sb_publishable_dOIM3vMGbHXyBaZIM3TZeg_dBSy7t6y..."; // 替换为你的完整可发布密钥
@@ -162,4 +232,5 @@
     }
   </script>
 </body>
+
 </html>

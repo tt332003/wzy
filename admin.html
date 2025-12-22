@@ -49,15 +49,15 @@
   </div>
 
   <script>
-    // 1. 先初始化Supabase（必须放在最前面，确保其他函数能使用）
+    // 1. 唯一初始化Supabase（无重复声明，放在最前面）
     const supabaseUrl = "https://oqkdcxmtxrwvsocgbpepp.supabase.co";
-    const supabaseKey = "sb_publishable_dOIM3vMGbHXyBaZIM3TZeg_dBSy7t6y..."; // 替换为你的完整可发布密钥
+    const supabaseKey = "sb_publishable_dOIM3vMGbHXyBaZIM3TZeg_dBSy7t6y..."; // 替换为你的完整可发布密钥（删除省略号，复制全部字符）
     const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
     // 2. 全局变量：标记是否登录
     let isAdminLoggedIn = false;
 
-    // 3. 商家登录函数（此时supabase已定义，可正常使用）
+    // 3. 商家登录函数
     async function adminLogin() {
       const email = document.getElementById('adminEmail').value.trim();
       const password = document.getElementById('adminPwd').value.trim();
@@ -77,7 +77,7 @@
           throw error;
         }
 
-        // 登录成功：隐藏登录模块，显示订单管理模块
+        // 登录成功：切换模块显示
         isAdminLoggedIn = true;
         document.getElementById('loginModule').style.display = 'none';
         document.getElementById('orderManageModule').style.display = 'block';
@@ -92,7 +92,7 @@
       }
     }
 
-    // 4. 获取所有订单（整合登录校验+完整逻辑，只定义1次）
+    // 4. 获取所有订单（整合登录校验+完整逻辑）
     async function getOrders() {
       // 登录校验
       if (!isAdminLoggedIn) {
@@ -130,7 +130,7 @@
 
       let orderHtml = '';
       orders.forEach(order => {
-        // 拼接菜品
+        // 拼接菜品列表
         let goodsHtml = '';
         order.goods.forEach(good => {
           goodsHtml += `
@@ -141,16 +141,16 @@
           `;
         });
 
-        // 状态样式
+        // 订单状态样式
         let statusClass = '';
         if (order.status === '待接单') statusClass = 'status-wait';
         if (order.status === '制作中') statusClass = 'status-making';
         if (order.status === '已完成') statusClass = 'status-done';
 
-        // 格式化时间
+        // 格式化下单时间
         const formatTime = new Date(order.create_time).toLocaleString('zh-CN');
 
-        // 拼接订单
+        // 拼接单个订单
         orderHtml += `
           <div class="order-item" data-order-id="${order.id}">
             <div class="order-header">
@@ -179,7 +179,7 @@
       orderListDom.innerHTML = orderHtml;
     }
 
-    // 6. 修改订单状态（整合登录校验+完整逻辑，只定义1次）
+    // 6. 修改订单状态（整合登录校验+完整逻辑）
     async function updateStatus(orderId, newStatus) {
       // 登录校验
       if (!isAdminLoggedIn) {
@@ -197,6 +197,7 @@
           throw error;
         }
 
+        // 刷新订单列表
         await getOrders();
         alert(`订单状态已更新为「${newStatus}」`);
       } catch (err) {
@@ -216,9 +217,9 @@
         .subscribe();
     }
 
-    // 8. 页面加载时无需初始化订单（仅登录后初始化）
+    // 8. 页面加载完成提示
     window.onload = function() {
-      console.log("页面加载完成，请先登录");
+      console.log("商家管理端页面加载完成，请输入账号密码登录");
     };
   </script>
 </body>
